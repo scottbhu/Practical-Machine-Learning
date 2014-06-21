@@ -1,0 +1,60 @@
+Model Cohort and Cross-Validation Cohort :
+==========================================
+The training data set was split up into one portion for model building and another portion for cross-validation.
+The split was 70% of the training set used for model building, and 30% of the training set used for cross-validation.
+
+
+Feature (Predictor) Selection:
+==============================
+There were several features (predictors) that contained mostly missing data. These predictors were not used in the model building process.
+
+
+Model Building without Utilizing Principal Components Analysis:
+===============================================================
+Random forest, boosted tree model and LDA were chosen as the 3 prediction systems used.
+In addition, a stacked model was then developed using the predictions from these three different prediction systems. This
+stacked model was developed using the random forest method.
+Application of the model on the cross-validation cohort was then used to select the prediction system that had the best 
+accuracy on the cross-validation cohort. This then allows us to obtain an estimate of the out of sample error as the
+model was not built on any of the cross-validation data. 
+Listed below are the accuracies of the different models as applied to the cross-validation cohort.
+
+- Accuracy of the random forest model: 0.9994902
+- Accuracy of the boosted tree model:  0.9945624
+- Accuracy of the LDA model: 0.855565
+- Accuracy of the stacked model: 0.9994902
+
+Of note, the random forest model had the best accuracy and was tied with the stacked model. Given that the stacked model 
+was more complex, ultimately, the random forest model was chosen as the final model.
+
+Model Building Utilizing Principal Components Analysis:
+=======================================================
+To determine if pre-processing by breaking down the predictors by principal components analysis (PCA) provided additional
+improvement to the model development, the random forest, boosted tree model, LDA and stacked model were then developed with
+preProcess = "PCA". Again, the models were built on the model cohort and tested on the cross-validation cohort. The out
+of sample error was again estimated by applying the models on the cross-validation cohort. 
+Listed below are the accuracies of the different models with PCA preprocessing as applied to the cross-validation cohort.
+
+- Accuracy of the random forest model with PCA preprocessing: 0.9765506
+- Accuracy of the boosted tree model with PCA preprocessing:  0.9085811
+- Accuracy of the LDA model with PCA preprocessing: 0.7036534
+- Accuracy of the stacked model with PCA preprocessing: 0.9767205
+ 
+Unlike above, the stacked model with PCA preprocessing was the most accurate model, beating out the random forest model 
+with PCA preprocessing.
+
+However, comparing to the random forest model without PCA preprocessing, the stacked model with PCA preprocessing was
+less accurate. As a result, the random forest model without PCA preprocessing was chosen as the final model.
+
+Out of Sample Error:
+====================
+Choosing the random forest model as the final model given that it was the most accurate model with an accuracy of 0.9994902,
+we see that the out of sample error (as applied to the cross-validation cohort) is 0.05098%.
+
+Testing:
+=======
+Given that the random forest model had the highest accuracy upon testing on the cross-validation cohort, it was chosen
+as the final model.
+At this point, the random forest model was tested for the first and only time on the test cohort that had previously
+been set aside for testing.
+
