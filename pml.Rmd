@@ -1,0 +1,467 @@
+Practical Machine Learning Course Project
+=========================================
+
+
+Load up the packages that will be used for this project
+
+```{r}
+library(caret)
+library(randomForest)
+library(gbm)
+library(plyr)
+library(MASS)
+```
+
+Read the data into data frames
+
+```{r}
+original_training <- read.csv('pml-training.csv')
+
+original_testing <- read.csv('pml-testing.csv')
+```
+
+### Feature (Predictor) Selection
+
+There were several features (predictors) that contained mostly missing data. These predictors were not used in the model building process.
+
+Summary of the training below suggests that there are multiple predictor that are empty or have values of DIV/0.
+- These predictors will have to be removed.
+- This will be performed in a later step.
+- The results are hidden as it generates too much data.
+
+```{r, results = "hide"}
+summary(original_training)
+```
+
+Create new training/testing sets that select out the features that do not have multiple missing values.
+- These training and testing sets will have complete data.
+
+```{r}
+training <- subset(original_training, select=c(user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window, roll_belt, pitch_belt, yaw_belt, total_accel_belt, gyros_belt_x, gyros_belt_y, gyros_belt_z, accel_belt_x, accel_belt_y, accel_belt_z, magnet_belt_x, magnet_belt_y, magnet_belt_z, roll_arm, pitch_arm, yaw_arm, total_accel_arm, gyros_arm_x, gyros_arm_y, gyros_arm_z, accel_arm_x, accel_arm_y, accel_arm_z, magnet_arm_x, magnet_arm_y, magnet_arm_z, roll_dumbbell, pitch_dumbbell, yaw_dumbbell, total_accel_dumbbell, gyros_dumbbell_x, gyros_dumbbell_y, gyros_dumbbell_z, accel_dumbbell_x, accel_dumbbell_y, accel_dumbbell_z, magnet_dumbbell_x, magnet_dumbbell_y, magnet_dumbbell_z, roll_forearm, pitch_forearm, yaw_forearm, total_accel_forearm, gyros_forearm_x, gyros_forearm_y, gyros_forearm_z, accel_forearm_x, accel_forearm_y, accel_forearm_z, magnet_forearm_x, magnet_forearm_y, magnet_forearm_z, classe))
+
+testing <- subset(original_testing, select=c(user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window, roll_belt, pitch_belt, yaw_belt, total_accel_belt, gyros_belt_x, gyros_belt_y, gyros_belt_z, accel_belt_x, accel_belt_y, accel_belt_z, magnet_belt_x, magnet_belt_y, magnet_belt_z, roll_arm, pitch_arm, yaw_arm, total_accel_arm, gyros_arm_x, gyros_arm_y, gyros_arm_z, accel_arm_x, accel_arm_y, accel_arm_z, magnet_arm_x, magnet_arm_y, magnet_arm_z, roll_dumbbell, pitch_dumbbell, yaw_dumbbell, total_accel_dumbbell, gyros_dumbbell_x, gyros_dumbbell_y, gyros_dumbbell_z, accel_dumbbell_x, accel_dumbbell_y, accel_dumbbell_z, magnet_dumbbell_x, magnet_dumbbell_y, magnet_dumbbell_z, roll_forearm, pitch_forearm, yaw_forearm, total_accel_forearm, gyros_forearm_x, gyros_forearm_y, gyros_forearm_z, accel_forearm_x, accel_forearm_y, accel_forearm_z, magnet_forearm_x, magnet_forearm_y, magnet_forearm_z, problem_id))
+```
+
+Change user_name to factor
+
+```{r}
+training$user_name <- factor(training$user_name)
+
+testing$user_name <- factor(testing$user_name)
+```
+
+### Model Cohort and Cross-Validation Cohort
+
+The training data set was split up into one portion for model building and another portion for cross-validation.
+- The model cohort will be 70% of the training set.
+- The cross-validation (CV) cohort will be 30% of the training set.
+
+```{r}
+set.seed(12345)
+
+inTrain <- createDataPartition(y = training$classe, p = 0.7, list = FALSE)
+
+model_cohort <- training[inTrain,]
+
+cv_cohort <- training[-inTrain,]
+```
+
+### Model Building without Utilizing Principal Components Analysis:
+
+Random forest, boosted tree model and LDA were chosen as the 3 prediction systems used. These models were built on the model cohort and then tested on the cross-validation cohort to determine which model had the best accuracy.
+
+In addition, a stacked model was then developed using the predictions from these three different prediction systems. This
+stacked model was developed using the random forest method.
+
+Application of the model on the cross-validation cohort was then used to select the prediction system that had the best 
+accuracy on the cross-validation cohort. This then allows us to obtain an estimate of the out of sample error as the
+model was not built on any of the cross-validation data. 
+
+Models used: 
+- Random forest
+- Boosted tree model
+- LDA
+
+Of note, the random forest model had the best accuracy and was tied with the stacked model. Given that the stacked model 
+was more complex, ultimately, the random forest model was chosen as the final model.
+
+
+### Random Forest Model without Principal Components Processing
+
+Build the random forest model on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r}
+rf_model <- train(classe~., method = "rf", data = model_cohort)
+
+rf_cv_predict <- predict(rf_model, cv_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(rf_cv_predict, cv_cohort$classe)
+```
+
+The random forest model produces the best accuracy. As will be seen later, it produces the same accuracy as the stacked model.
+
+```{r}
+rf_cv_accuracy <- sum(ifelse(rf_cv_predict == cv_cohort$classe, 1, 0))/length(rf_cv_predict)
+
+
+rf_cv_accuracy
+```
+
+### Boosted Tree Model without Principal Components Processing
+
+Build the boosted tree model on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r, results = "hide"}
+gbm_model <- train(classe~., method = "gbm", data = model_cohort)
+
+gbm_cv_predict <- predict(gbm_model, cv_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(gbm_cv_predict, cv_cohort$classe)
+```
+
+The boosted tree model produces the model with the second best accuracy.
+
+```{r}
+gbm_cv_accuracy <- sum(ifelse(gbm_cv_predict == cv_cohort$classe, 1, 0))/length(gbm_cv_predict)
+
+gbm_cv_accuracy
+```
+
+### LDA Model without Principal Components Processing
+
+Build the LDA model on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r, results = "hide"}
+lda_model <- train(classe~., method = "lda", data = model_cohort)
+
+lda_cv_predict <- predict(lda_model, cv_cohort)
+```
+
+Table of predictions (rows) compared to the truee classe (columns)
+
+```{r}
+table(lda_cv_predict, cv_cohort$classe)
+```
+
+The LDA model's accuracy is worse than the boosted tree model.
+
+```{r}
+lda_cv_accuracy <- sum(ifelse(lda_cv_predict == cv_cohort$classe, 1, 0))/length(lda_cv_predict)
+
+lda_cv_accuracy
+```
+
+
+### Build a stacked random forest model using the above models 
+- This will be the stacked model of the random forest model, boosted tree model and the LDA model
+- This model will be developed using the random forest method
+
+Create a new data frame where the features (predictors) are the predictions of the random forest model, boosted tree model and LDA model. 
+
+```{r}
+stacked_model_cohort <- data.frame(model_cohort$classe, predict(rf_model, model_cohort), predict(gbm_model, model_cohort), predict(lda_model, model_cohort))
+
+colnames(stacked_model_cohort)[1] <- "classe"
+colnames(stacked_model_cohort)[2] <- "rf_predict"
+colnames(stacked_model_cohort)[3] <- "gbm_predict"
+colnames(stacked_model_cohort)[4] <- "lda_predict"
+
+stacked_cv_cohort <- data.frame(cv_cohort$classe, predict(rf_model, cv_cohort), predict(gbm_model, cv_cohort), predict(lda_model, cv_cohort))
+
+colnames(stacked_cv_cohort)[1] <- "classe"
+colnames(stacked_cv_cohort)[2] <- "rf_predict"
+colnames(stacked_cv_cohort)[3] <- "gbm_predict"
+colnames(stacked_cv_cohort)[4] <- "lda_predict"
+```
+
+Build the stacked model on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r, results = "hide"}
+stacked_rf_model <- train(classe~., method = "rf", data = stacked_model_cohort)
+
+stacked_rf_cv_predict <- predict(stacked_rf_model, stacked_cv_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(stacked_rf_cv_predict, stacked_cv_cohort$classe)
+```
+
+The stacked model's accuracy is the same as the random forest model alone.
+
+```{r}
+stacked_rf_cv_accuracy <- sum(ifelse(stacked_rf_cv_predict == stacked_cv_cohort$classe, 1, 0))/length(stacked_rf_cv_predict)
+
+stacked_rf_cv_accuracy
+```
+
+### Out of Sample Error Estimate of Models without PCA Preprocessing
+
+Create new data frame of the accuracy and out of sample errors (as performed on the cross-validation cohort) of the different models.
+
+```{r}
+rf_model_oos_error <- data.frame(rf_cv_accuracy, 1 - rf_cv_accuracy)
+
+colnames(rf_model_oos_error)[1] <- 'accuracy'
+colnames(rf_model_oos_error)[2] <- 'out_of_sample_error'
+
+gbm_model_oos_error <- data.frame(gbm_cv_accuracy, 1 - gbm_cv_accuracy)
+
+colnames(gbm_model_oos_error)[1] <- 'accuracy'
+colnames(gbm_model_oos_error)[2] <- 'out_of_sample_error'
+
+lda_model_oos_error <- data.frame(lda_cv_accuracy, 1 - lda_cv_accuracy)
+
+colnames(lda_model_oos_error)[1] <- 'accuracy'
+colnames(lda_model_oos_error)[2] <- 'out_of_sample_error'
+
+stacked_rf_model_oos_error <- data.frame(stacked_rf_cv_accuracy, 1 - stacked_rf_cv_accuracy)
+
+colnames(stacked_rf_model_oos_error)[1] <- 'accuracy'
+colnames(stacked_rf_model_oos_error)[2] <- 'out_of_sample_error'
+
+oos_error_of_models_without_pca <- rbind(rf_model_oos_error, gbm_model_oos_error, lda_model_oos_error, stacked_rf_model_oos_error)
+
+rownames(oos_error_of_models_without_pca)[1] <- 'random_forest_model'
+
+rownames(oos_error_of_models_without_pca)[2] <- 'boosted_tree_model'
+
+rownames(oos_error_of_models_without_pca)[3] <- 'lda_model'
+
+rownames(oos_error_of_models_without_pca)[4] <- 'stacked_random_forest_model'
+```
+
+Data frame that compares the accuracies and out of sample errors on the different models.
+
+```{r}
+oos_error_of_models_without_pca
+```
+
+
+### Model Building Utilizing Principal Components Analysis:
+
+To determine if pre-processing by breaking down the predictors by principal components analysis (PCA) provided additional
+improvement to the model development, the random forest, boosted tree model, LDA and stacked model were then developed with
+preProcess = "PCA". 
+
+Again, the models were built on the model cohort and tested on the cross-validation cohort. The out of sample error was again estimated by applying the models on the cross-validation cohort. 
+
+Unlike above, the stacked model with PCA preprocessing was the most accurate model, beating out the random forest model 
+with PCA preprocessing.
+
+However, comparing to the random forest model without PCA preprocessing, the stacked model with PCA preprocessing was
+less accurate. As a result, the random forest model without PCA preprocessing was chosen as the final model.
+
+### Random Forest Model with PCA preProcess
+
+Build the random forest model with PCA preprocessing on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r, results = "hide"}
+rf_pca_model <- train(classe~., method = "rf", preProcess = "pca", data = model_cohort)
+
+rf_pca_cv_predict <- predict(rf_pca_model, cv_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(rf_pca_cv_predict, cv_cohort$classe)
+```
+
+The random forest model with PCA preprocessing has an accuracy that is worse than the original random forest model above.
+
+```{r}
+rf_pca_cv_accuracy <- sum(ifelse(rf_pca_cv_predict == cv_cohort$classe, 1, 0))/length(rf_pca_cv_predict)
+
+rf_pca_cv_accuracy
+```
+
+### Boosted Tree Model with PCA preProcess
+
+Build the boosted tree model with PCA preprocessing on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r, results = "hide"}
+gbm_pca_model <- train(classe~., method = "gbm", preProcess = "pca", data = model_cohort)
+
+gbm_pca_cv_predict <- predict(gbm_pca_model, cv_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(gbm_pca_cv_predict, cv_cohort$classe)
+```
+
+The boosted tree model with PCA preprocessing has an accuracy that is worse than the original boosted tree model.
+
+```{r}
+gbm_pca_cv_accuracy <- sum(ifelse(gbm_pca_cv_predict == cv_cohort$classe, 1, 0))/length(gbm_pca_cv_predict)
+
+gbm_pca_cv_accuracy
+```
+
+### LDA Model with PCA preProcess
+
+Build the LDA model with PCA preprocessing on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r}
+lda_pca_model <- train(classe~., method = "lda", preProcess = "pca", data = model_cohort)
+
+lda_pca_cv_predict <- predict(lda_pca_model, cv_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(lda_pca_cv_predict, cv_cohort$classe)
+```
+
+The accuracy of the LDA model with PCA preprocessing is worse than the original LDA model.
+
+```{r}
+lda_pca_cv_accuracy <- sum(ifelse(lda_pca_cv_predict == cv_cohort$classe, 1, 0))/length(lda_pca_cv_predict)
+
+lda_pca_cv_accuracy
+```
+
+
+### Build a stacked random forest model using the above models (with PCA preprocessing)
+- This will be the stacked model of the random forest model (with PCA preprocessing), boosted tree model (with PCA preprocessing) and the LDA model (with PCA preprocessing)
+- This model will be developed using the random forest method
+
+Create a new data frame where the features (predictors) are the predictions of the random forest model (with PCA preprocessing), boosted tree model (with PCA preprocessing) and LDA model (with PCA preprocessing). 
+
+```{r}
+stacked_model_pca_cohort <- data.frame(model_cohort$classe, predict(rf_pca_model, model_cohort), predict(gbm_pca_model, model_cohort), predict(lda_pca_model, model_cohort))
+
+colnames(stacked_model_pca_cohort)[1] <- "classe"
+colnames(stacked_model_pca_cohort)[2] <- "rf_pca_predict"
+colnames(stacked_model_pca_cohort)[3] <- "gbm_pca_predict"
+colnames(stacked_model_pca_cohort)[4] <- "lda_pca_predict"
+
+stacked_cv_pca_cohort <- data.frame(cv_cohort$classe, predict(rf_pca_model, cv_cohort), predict(gbm_pca_model, cv_cohort), predict(lda_pca_model, cv_cohort))
+
+colnames(stacked_cv_pca_cohort)[1] <- "classe"
+colnames(stacked_cv_pca_cohort)[2] <- "rf_pca_predict"
+colnames(stacked_cv_pca_cohort)[3] <- "gbm_pca_predict"
+colnames(stacked_cv_pca_cohort)[4] <- "lda_pca_predict"
+```
+
+Build the stacked random forest model using the above models that used PCA preprocessing on the model cohort and then use it to predict the classe on the cross-validation cohort.
+
+```{r}
+stacked_rf_pca_model <- train(classe~., method = "rf", data = stacked_model_pca_cohort)
+
+stacked_rf_pca_cv_predict <- predict(stacked_rf_pca_model, stacked_cv_pca_cohort)
+```
+
+Table of predictions (rows) compared to the true classe (columns)
+
+```{r}
+table(stacked_rf_pca_cv_predict, stacked_cv_pca_cohort$classe)
+```
+
+The stacked model using the previous models with PCA preprocessing has an accuracy that is equal to the random forest model with PCA processing.
+
+```{r}
+stacked_rf_pca_cv_accuracy <- sum(ifelse(stacked_rf_pca_cv_predict == stacked_cv_pca_cohort$classe, 1, 0))/length(stacked_rf_pca_cv_predict)
+
+stacked_rf_pca_cv_accuracy
+```
+
+### Out of Sample Error Estimate of Models with PCA Preprocessing
+
+Create new data frame of the accuracy and out of sample errors (as performed on the cross-validation cohort) of the different models.
+
+```{r}
+rf_pca_model_oos_error <- data.frame(rf_pca_cv_accuracy, 1 - rf_pca_cv_accuracy)
+
+colnames(rf_pca_model_oos_error)[1] <- 'accuracy'
+colnames(rf_pca_model_oos_error)[2] <- 'out_of_sample_error'
+
+gbm_pca_model_oos_error <- data.frame(gbm_pca_cv_accuracy, 1 - gbm_pca_cv_accuracy)
+
+colnames(gbm_pca_model_oos_error)[1] <- 'accuracy'
+colnames(gbm_pca_model_oos_error)[2] <- 'out_of_sample_error'
+
+lda_pca_model_oos_error <- data.frame(lda_pca_cv_accuracy, 1 - lda_pca_cv_accuracy)
+
+colnames(lda_pca_model_oos_error)[1] <- 'accuracy'
+colnames(lda_pca_model_oos_error)[2] <- 'out_of_sample_error'
+
+stacked_rf_pca_model_oos_error <- data.frame(stacked_rf_pca_cv_accuracy, 1 - stacked_rf_pca_cv_accuracy)
+
+colnames(stacked_rf_pca_model_oos_error)[1] <- 'accuracy'
+colnames(stacked_rf_pca_model_oos_error)[2] <- 'out_of_sample_error'
+
+oos_error_of_models_with_pca <- rbind(rf_pca_model_oos_error, gbm_pca_model_oos_error, lda_pca_model_oos_error, stacked_rf_pca_model_oos_error)
+
+rownames(oos_error_of_models_with_pca)[1] <- 'random_forest_model_with_pca'
+
+rownames(oos_error_of_models_with_pca)[2] <- 'boosted_tree_model_with_pca'
+
+rownames(oos_error_of_models_with_pca)[3] <- 'lda_model_with_pca'
+
+rownames(oos_error_of_models_with_pca)[4] <- 'stacked_random_forest_model_with_pca'
+```
+
+Data frame that compares the accuracies and out of sample errors on the different models. Of note, these models were performed using PCA preprocessing.
+
+```{r}
+oos_error_of_models_with_pca
+```
+
+For comparison, here is the data frame of results from the model comparisons without PCA preprocessing.
+
+```{r}
+oos_error_of_models_without_pca
+```
+
+The best model performance on the cross-validation cohort with the smallest out of sample error is the random forest model and the stacked random forest model.
+
+As a result, PCA preprocessing is not needed and the random forest model will be selected as the final model because, of the models with the best accuracy, it was the simpler model.
+
+### Final Model is the Random Forest Model without PCA
+
+Given that the random forest model (without PCA) produces the same result as the stacked model, the random forest model was chosen as the final model for simplicity
+
+### Out of Sample Error
+
+The random forest model was chosen as the final model given that it was the most accurate model with an accuracy of 0.9994902.
+
+Therefore, the out of sample error (as applied to the cross-validation cohort) is 0.05098% for the random forest model.
+
+### Testing of the best model on the testing cohort:
+
+Given that the random forest model had the highest accuracy on the cross-validation cohort, it was chosen as the final model.
+
+At this point, the random forest model was tested for the first and only time on the test cohort that had previously
+been set aside for testing.
+
+Recall that the random forest model was the most accurate model on the cross-validation cohort, hence it was chosen as the final model.
+- test date frame used: testing
+
+```{r}
+# Column 59 of testing is the problem_id
+
+rf_test_predict <- predict(rf_model, testing[, -59])
+```
+
+The results of the random forest model (final model chosen) on the test data demonstrates that it is able to correctly predict the classe of all 20 test cases.
+
+```{r}
+test_result <- data.frame(testing$problem_id, rf_test_predict)
+
+colnames(test_result)[1] <- 'problem_id'
+
+test_result
+```
